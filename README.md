@@ -15,66 +15,101 @@ This plugin enables both conversational AI agents and direct SDK usage to:
 ## Installation
 
 ```bash
-npm install hedera-chainlink-plugin
+npm install hedera-chainlink-plugin hedera-agent-kit
 ```
 
-### Peer Dependencies
+> **Note**: The peer dependencies `@hashgraph/sdk`, `ethers`, and `zod` will be automatically installed with `hedera-agent-kit`.
 
-Make sure you have the required peer dependencies installed:
+### Learn More
 
-```bash
-npm install @hashgraph/sdk ethers zod
-```
+This plugin is designed to work with the [Hedera Agent Kit](https://github.com/hashgraph/hedera-agent-kit-js). Visit the repository to learn more about building AI agents on Hedera.
 
 ## Usage
 
 ### Importing the Plugin
 
 ```typescript
-import { chainlinkPlugin, chainlinkPluginToolNames } from "./plugins/chainlink-plugin";
-import { HederaLangchainToolkit } from "hedera-agent-kit";
+import {
+  AgentMode,
+  HederaLangchainToolkit,
+  coreAccountPlugin,
+  coreConsensusPlugin,
+  coreTokenPlugin,
+} from 'hedera-agent-kit';
+import { chainlinkPlugin } from 'hedera-chainlink-plugin';
+import { Client, PrivateKey } from '@hashgraph/sdk';
 ```
 
 ### Configuring with Hedera Agent Kit
 
 ```typescript
+// Initialize Hedera client
+const client = Client.forTestnet().setOperator(
+  process.env.ACCOUNT_ID!,
+  PrivateKey.fromStringECDSA(process.env.PRIVATE_KEY!)
+);
+
+// Create toolkit with Chainlink plugin
 const hederaAgentToolkit = new HederaLangchainToolkit({
   client,
   configuration: {
-    tools: [
-      chainlinkPluginToolNames.GET_PRICE_FEED_TOOL,
-      chainlinkPluginToolNames.GET_ALL_PRICES_TOOL,
-    ],
-    context: {
-      mode: AgentMode.AUTONOMOUS,
-    },
     plugins: [
       coreAccountPlugin,
       coreConsensusPlugin,
       coreTokenPlugin,
       chainlinkPlugin, // Add Chainlink plugin
     ],
-  },
-});
-```
-
-### Using Specific Tools Only
-
-You can cherry-pick individual tools if you don't need all functionality:
-
-```typescript
-const hederaAgentToolkit = new HederaLangchainToolkit({
-  client,
-  configuration: {
-    tools: [
-      chainlinkPluginToolNames.GET_PRICE_FEED_TOOL, // Only enable price feed queries
-    ],
     context: {
       mode: AgentMode.AUTONOMOUS,
     },
-    plugins: [chainlinkPlugin],
   },
 });
+
+// Get tools for your agent
+const tools = await hederaAgentToolkit.getTools();
+```
+
+### Complete Example with AI Agent
+
+```typescript
+import { ChatGroq } from '@langchain/groq';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { createToolCallingAgent, AgentExecutor } from 'langchain/agents';
+
+// Initialize LLM
+const llm = new ChatGroq({
+  model: 'llama-3.3-70b-versatile',
+  apiKey: process.env.GROQ_API_KEY,
+  temperature: 0.7,
+});
+
+// Create prompt
+const prompt = ChatPromptTemplate.fromMessages([
+  ['system', 'You are a helpful assistant with access to Hedera and Chainlink tools.'],
+  ['human', '{input}'],
+  ['placeholder', '{agent_scratchpad}'],
+]);
+
+// Create agent
+const agent = await createToolCallingAgent({
+  llm,
+  tools,
+  prompt,
+});
+
+// Create executor
+const agentExecutor = new AgentExecutor({
+  agent,
+  tools,
+  verbose: true,
+});
+
+// Use the agent
+const result = await agentExecutor.invoke({
+  input: "What's the current price of Bitcoin?",
+});
+
+console.log(result.output);
 ```
 
 ## Functionality
@@ -182,7 +217,7 @@ You can also use the plugin tools directly without an AI agent:
 
 ```typescript
 import { Client } from "@hashgraph/sdk";
-import getPriceFeedTool from "./plugins/chainlink-plugin/tools/price-feeds/get-price-feed";
+import { chainlinkPlugin } from "hedera-chainlink-plugin";
 
 // Initialize Hedera client
 const client = Client.forTestnet();
@@ -190,11 +225,12 @@ const client = Client.forTestnet();
 // Create context
 const context = { mode: "AUTONOMOUS" };
 
-// Get the tool
-const tool = getPriceFeedTool(context);
+// Get the tools from the plugin
+const tools = chainlinkPlugin.tools(context);
+const getPriceFeedTool = tools[0]; // GET_PRICE_FEED_TOOL
 
 // Execute the tool
-const result = await tool.execute(client, context, { pair: "BTC/USD" });
+const result = await getPriceFeedTool.execute(client, context, { pair: "BTC/USD" });
 
 console.log(result);
 ```
