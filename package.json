@@ -1,6 +1,6 @@
 {
   "name": "hedera-chainlink-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Chainlink Price Feed plugin for Hedera Agent Kit - Query real-time cryptocurrency prices from Chainlink oracles on Hedera",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
